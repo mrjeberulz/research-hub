@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { loadAll, loadCategory, loadDoc } from "@/lib/content";
-import { CATEGORY_META, type ContentCategory } from "@/lib/types";
+import { loadCategory, loadDoc } from "@/lib/content";
+import { loadStrategy } from "@/lib/strategy";
+import { CATEGORY_META, type ContentCategory, type ContentDoc } from "@/lib/types";
 import { DocCard } from "@/components/doc-card";
+
+const PREVIEW = 3;
 
 const ROLLUP_CATEGORIES: ContentCategory[] = [
   "findings",
@@ -56,31 +59,42 @@ function formatMonth(date: string | undefined): string | null {
   return `${months[idx]} ${m[1]}`;
 }
 
+function isOpenTodo(doc: ContentDoc): boolean {
+  const status = doc.frontmatter.status;
+  return status !== "done";
+}
+
 export default function HomePage() {
+  const strategy = loadStrategy();
+  const implications = loadCategory("implications");
+  const hypotheses = loadCategory("hypotheses");
+  const openTodos = loadCategory("todos").filter(isOpenTodo);
   const rollups = buildRollups();
-  const recent = loadAll()
-    .filter((d) => d.frontmatter.date && d.category !== "sources" && d.category !== "summaries")
-    .slice(0, 5);
+  const hasWork =
+    implications.length > 0 || hypotheses.length > 0 || openTodos.length > 0 || rollups.length > 0;
 
   return (
     <div className="space-y-12">
       <header>
         <div className="text-xs font-medium uppercase tracking-widest text-accent-700">
-          Workspace
+          Start here
         </div>
-        <h1 className="mt-2 font-serif text-4xl font-semibold leading-tight text-ink-900">
-          Agent Studio · Research &amp; Strategy
+        <h1 className="mt-2 font-serif text-3xl font-semibold leading-snug text-ink-900">
+          {strategy?.problem ?? "Agent Studio · Research & Strategy"}
         </h1>
-        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-600">
-          A research-grounded workspace. Every strategy artifact here — a finding, a hypothesis, a
-          design goal, an idea — cites the research it was drawn from. Read the source, then read
-          what was built on top of it.
+        <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-600">
+          {strategy
+            ? `The question ${strategy.name} strategy is trying to answer. Implications, hypotheses, and to-dos below are what the research says about it. Each one cites the study it came from.`
+            : "Implications, hypotheses, and to-dos are what the research says. Each one cites the study it came from."}
         </p>
+        {strategy?.updated && (
+          <p className="mt-3 text-xs text-ink-500">Strategy updated {formatMonth(strategy.updated)}</p>
+        )}
       </header>
 
-      {rollups.length === 0 ? (
+      {!hasWork && (
         <section className="rounded-lg border border-dashed border-ink-300 bg-ink-50 p-8 text-center">
-          <h3 className="font-serif text-lg font-semibold text-ink-900">Nothing here yet</h3>
+          <h2 className="font-serif text-lg font-semibold text-ink-900">Nothing here yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-ink-600">
             Run{" "}
             <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">
@@ -90,36 +104,118 @@ export default function HomePage() {
             Agent Studio implications — all grounded with citations back to the source.
           </p>
         </section>
-      ) : (
+      )}
+
+      <PreviewSection
+        title="Implications"
+        meta="latest"
+        href="/implications"
+        docs={implications.slice(0, PREVIEW)}
+        total={implications.length}
+      />
+
+      <PreviewSection
+        title="Hypotheses"
+        meta="latest"
+        href="/hypotheses"
+        docs={hypotheses.slice(0, PREVIEW)}
+        total={hypotheses.length}
+      />
+
+      {openTodos.length > 0 && (
         <section>
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="font-serif text-lg font-semibold text-ink-900">
-              Research{" "}
-              <span className="text-sm font-normal text-ink-400">
-                · {rollups.length} {rollups.length === 1 ? "source" : "sources"}
-              </span>
-            </h2>
-          </div>
-          <div className="space-y-4">
+          <SectionHeading
+            title="Open to-dos"
+            meta={`${openTodos.length} open`}
+            href="/todos"
+            showAll={openTodos.length > PREVIEW}
+          />
+          <ul className="divide-y divide-ink-200 rounded-lg border border-ink-200">
+            {openTodos.slice(0, PREVIEW).map((doc) => (
+              <li key={doc.href}>
+                <Link
+                  href={doc.href}
+                  className="flex items-baseline justify-between gap-4 px-4 py-3 hover:bg-ink-50"
+                >
+                  <span className="font-medium leading-snug text-ink-900">{doc.frontmatter.title}</span>
+                  {doc.frontmatter.status && doc.frontmatter.status !== "open" && (
+                    <span className="shrink-0 text-xs capitalize text-ink-500">
+                      {doc.frontmatter.status}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {rollups.length > 0 && (
+        <section>
+          <SectionHeading
+            title="Studies"
+            meta={`${rollups.length} ${rollups.length === 1 ? "source" : "sources"}`}
+            href="/sources"
+            showAll={false}
+          />
+          <div className="space-y-3">
             {rollups.map((r) => (
               <RollupCard key={r.slug} rollup={r} />
             ))}
           </div>
         </section>
       )}
+    </div>
+  );
+}
 
-      {recent.length > 0 && (
-        <section>
-          <h2 className="mb-4 font-serif text-lg font-semibold text-ink-900">
-            Recent{" "}
-            <span className="text-sm font-normal text-ink-400">· latest derived artifacts</span>
-          </h2>
-          <div className="space-y-3">
-            {recent.map((d) => (
-              <DocCard key={d.href} doc={d} />
-            ))}
-          </div>
-        </section>
+function PreviewSection({
+  title,
+  meta,
+  href,
+  docs,
+  total,
+}: {
+  title: string;
+  meta: string;
+  href: string;
+  docs: ContentDoc[];
+  total: number;
+}) {
+  if (docs.length === 0) return null;
+  return (
+    <section>
+      <SectionHeading title={title} meta={meta} href={href} showAll={total > docs.length} />
+      <div className="space-y-3">
+        {docs.map((d) => (
+          <DocCard key={d.href} doc={d} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SectionHeading({
+  title,
+  meta,
+  href,
+  showAll,
+}: {
+  title: string;
+  meta: string;
+  href: string;
+  showAll: boolean;
+}) {
+  return (
+    <div className="mb-4 flex items-baseline justify-between gap-4">
+      <h2 className="font-serif text-lg font-semibold text-ink-900">
+        {title}{" "}
+        <span className="text-sm font-normal text-ink-400">· {meta}</span>
+      </h2>
+      {showAll && (
+        <Link href={href} className="shrink-0 text-xs font-medium text-ink-500 hover:text-accent-700">
+          All →
+        </Link>
       )}
     </div>
   );
@@ -129,24 +225,21 @@ function RollupCard({ rollup }: { rollup: SourceRollup }) {
   const month = formatMonth(rollup.date);
   const nonZero = rollup.counts.filter((c) => c.count > 0);
   return (
-    <article className="rounded-lg border border-ink-200 bg-white p-6 transition hover:border-accent-500 hover:shadow-sm">
+    <article className="rounded-lg border border-ink-200 bg-white p-4">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium uppercase tracking-wider text-ink-500">
-        <span className="text-accent-700">Research source</span>
-        {month && <span className="text-ink-400">·</span>}
-        {month && <span className="text-ink-500">{month}</span>}
-        {rollup.author && <span className="text-ink-400">·</span>}
-        {rollup.author && <span className="normal-case tracking-normal text-ink-500">{rollup.author}</span>}
+        {month && <span>{month}</span>}
+        {month && rollup.author && <span className="text-ink-400">·</span>}
+        {rollup.author && (
+          <span className="normal-case tracking-normal text-ink-500">{rollup.author}</span>
+        )}
       </div>
-      <Link href={rollup.href} className="group block">
-        <h3 className="mt-2 font-serif text-2xl font-semibold leading-snug text-ink-900 group-hover:text-accent-700">
+      <Link href={rollup.href} className="group mt-1 block">
+        <h3 className="font-serif text-lg font-semibold leading-snug text-ink-900 group-hover:text-accent-700">
           {rollup.title}
         </h3>
-        {rollup.snippet && (
-          <p className="mt-2 text-sm leading-relaxed text-ink-600">{rollup.snippet}</p>
-        )}
       </Link>
       {nonZero.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {nonZero.map((c) => (
             <Link
               key={c.category}

@@ -69,17 +69,6 @@ export function SidebarContent() {
           ))}
         </Section>
       </nav>
-
-      <div className="mt-auto rounded-lg border border-ink-200 bg-ink-50 p-3 text-xs leading-relaxed text-ink-600">
-        <div className="font-semibold text-ink-800">Add new research</div>
-        <p className="mt-1">
-          In Claude Code, run{" "}
-          <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] text-ink-800">
-            /research-strategy &lt;url&gt;
-          </code>{" "}
-          to ingest a paper, then refresh.
-        </p>
-      </div>
     </div>
   );
 }
