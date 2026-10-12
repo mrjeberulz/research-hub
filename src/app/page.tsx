@@ -1,10 +1,21 @@
 import Link from "next/link";
-import { loadCategory, loadDoc } from "@/lib/content";
+import { loadCategory, loadDoc, loadRecent } from "@/lib/content";
 import { loadStrategy } from "@/lib/strategy";
 import { CATEGORY_META, type ContentCategory, type ContentDoc } from "@/lib/types";
 import { DocCard } from "@/components/doc-card";
 
 const PREVIEW = 3;
+
+const RECENT_LABEL: Record<ContentCategory, string> = {
+  sources: "Sources",
+  summaries: "Summaries",
+  findings: "Findings",
+  implications: "Implications",
+  hypotheses: "Hypotheses",
+  "design-goals": "Design goals",
+  ideas: "Ideas",
+  todos: "To-dos",
+};
 
 const ROLLUP_CATEGORIES: ContentCategory[] = [
   "findings",
@@ -66,12 +77,17 @@ function isOpenTodo(doc: ContentDoc): boolean {
 
 export default function HomePage() {
   const strategy = loadStrategy();
+  const recent = loadRecent();
   const implications = loadCategory("implications");
   const hypotheses = loadCategory("hypotheses");
   const openTodos = loadCategory("todos").filter(isOpenTodo);
   const rollups = buildRollups();
   const hasWork =
-    implications.length > 0 || hypotheses.length > 0 || openTodos.length > 0 || rollups.length > 0;
+    recent.length > 0 ||
+    implications.length > 0 ||
+    hypotheses.length > 0 ||
+    openTodos.length > 0 ||
+    rollups.length > 0;
 
   return (
     <div className="space-y-12">
@@ -103,6 +119,35 @@ export default function HomePage() {
             in Claude Code to ingest a research doc. The skill will write a summary, findings, and
             Agent Studio implications — all grounded with citations back to the source.
           </p>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section>
+          <h2 className="mb-4 font-serif text-lg font-semibold text-ink-900">
+            Recent{" "}
+            <span className="text-sm font-normal text-ink-400">· across categories</span>
+          </h2>
+          <ul className="divide-y divide-ink-200 rounded-lg border border-ink-200">
+            {recent.map((doc) => (
+              <li key={doc.href}>
+                <Link
+                  href={doc.href}
+                  className="flex items-baseline gap-3 px-4 py-3 hover:bg-ink-50"
+                >
+                  <span className="w-28 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-accent-700">
+                    {RECENT_LABEL[doc.category]}
+                  </span>
+                  <span className="min-w-0 flex-1 font-medium leading-snug text-ink-900">
+                    {doc.frontmatter.title}
+                  </span>
+                  <span className="hidden shrink-0 text-xs text-ink-400 sm:inline">
+                    {doc.frontmatter.date}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

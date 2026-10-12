@@ -97,6 +97,62 @@ export function loadAll(): ContentDoc[] {
   return ALL_CATEGORIES.flatMap(loadCategory);
 }
 
+/** Derived artifacts only. Sources and summaries are the studies themselves. */
+const RECENT_CATEGORIES: ContentCategory[] = [
+  "findings",
+  "implications",
+  "hypotheses",
+  "design-goals",
+  "ideas",
+  "todos",
+];
+
+/**
+ * Newest derived artifacts across categories.
+ *
+ * A plain date sort is not enough: one ingest writes many docs on the same
+ * day, and findings outnumber the rest, so the first N rows would all be
+ * findings. Within a day, take one doc from each category before taking a
+ * second from any of them. Newer days are exhausted before older ones.
+ */
+export function loadRecent(limit = 6): ContentDoc[] {
+  const byDate = new Map<string, ContentDoc[]>();
+  for (const category of RECENT_CATEGORIES) {
+    for (const doc of loadCategory(category)) {
+      const date = doc.frontmatter.date;
+      if (!date) continue;
+      const group = byDate.get(date);
+      if (group) group.push(doc);
+      else byDate.set(date, [doc]);
+    }
+  }
+
+  const out: ContentDoc[] = [];
+  const dates = [...byDate.keys()].sort((a, b) => b.localeCompare(a));
+  for (const date of dates) {
+    const buckets = new Map<ContentCategory, ContentDoc[]>();
+    for (const doc of byDate.get(date) ?? []) {
+      const bucket = buckets.get(doc.category);
+      if (bucket) bucket.push(doc);
+      else buckets.set(doc.category, [doc]);
+    }
+    const categories = RECENT_CATEGORIES.filter((category) => buckets.has(category));
+    let progressed = true;
+    while (progressed && out.length < limit) {
+      progressed = false;
+      for (const category of categories) {
+        const next = buckets.get(category)?.shift();
+        if (!next) continue;
+        out.push(next);
+        progressed = true;
+        if (out.length >= limit) break;
+      }
+    }
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export function loadDoc(category: ContentCategory, slug: string): ContentDoc | null {
   const docs = loadCategory(category);
   return docs.find((d) => d.slug === slug) ?? null;
